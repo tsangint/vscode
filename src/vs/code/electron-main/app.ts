@@ -63,8 +63,7 @@ import { serve as serveDriver } from 'vs/platform/driver/electron-main/driver';
 import { IMenubarService } from 'vs/platform/menubar/common/menubar';
 import { MenubarService } from 'vs/platform/menubar/electron-main/menubarService';
 import { MenubarChannel } from 'vs/platform/menubar/common/menubarIpc';
-// TODO@sbatten: Remove after conversion to new dynamic menubar
-import { CodeMenu } from 'vs/code/electron-main/menus';
+import { IUriDisplayService } from 'vs/platform/uriDisplay/common/uriDisplay';
 
 export class CodeApplication {
 
@@ -87,7 +86,8 @@ export class CodeApplication {
 		@ILifecycleService private lifecycleService: ILifecycleService,
 		@IConfigurationService private configurationService: ConfigurationService,
 		@IStateService private stateService: IStateService,
-		@IHistoryMainService private historyMainService: IHistoryMainService
+		@IHistoryMainService private historyMainService: IHistoryMainService,
+		@IUriDisplayService private uriDisplayService: IUriDisplayService
 	) {
 		this.toDispose = [mainIpcServer, configurationService];
 
@@ -220,6 +220,10 @@ export class CodeApplication {
 				// Send to all windows (except sender window)
 				this.windowsMainService.sendToAll('vscode:broadcast', broadcast, [windowId]);
 			}
+		});
+
+		ipc.on('vscode:uriDisplayRegisterFormater', (event: any, { scheme, formater }) => {
+			this.uriDisplayService.registerFormater(scheme, formater);
 		});
 
 		// Keyboard layout changes
@@ -509,14 +513,6 @@ export class CodeApplication {
 					});
 				}
 			}
-		}
-
-		// TODO@sbatten: Remove when menu is converted
-		// Install Menu
-		const instantiationService = accessor.get(IInstantiationService);
-		const configurationService = accessor.get(IConfigurationService);
-		if (platform.isMacintosh || configurationService.getValue<string>('window.titleBarStyle') !== 'custom') {
-			instantiationService.createInstance(CodeMenu);
 		}
 
 		// Jump List

@@ -2707,13 +2707,15 @@ declare module 'vscode' {
 	}
 
 	/**
-	 * A workspace edit represents textual and files changes for
+	 * A workspace edit is a collection of textual and files changes for
 	 * multiple resources and documents.
+	 *
+	 * Use the [applyEdit](#workspace.applyEdit)-function to apply a workspace edit.
 	 */
 	export class WorkspaceEdit {
 
 		/**
-		 * The number of affected resources.
+		 * The number of affected resources of textual or resource changes.
 		 */
 		readonly size: number;
 
@@ -2744,7 +2746,8 @@ declare module 'vscode' {
 		delete(uri: Uri, range: Range): void;
 
 		/**
-		 * Check if this edit affects the given resource.
+		 * Check if a text edit for a resource exists.
+		 *
 		 * @param uri A resource identifier.
 		 * @return `true` if the given resource will be touched by this edit.
 		 */
@@ -2765,6 +2768,33 @@ declare module 'vscode' {
 		 * @return An array of text edits.
 		 */
 		get(uri: Uri): TextEdit[];
+
+		/**
+		 * Create a regular file.
+		 *
+		 * @param uri Uri of the new file..
+		 * @param options Defines if an existing file should be overwritten or be
+		 * ignored. When overwrite and ignoreIfExists are both set overwrite wins.
+		 */
+		createFile(uri: Uri, options?: { overwrite?: boolean, ignoreIfExists?: boolean }): void;
+
+		/**
+		 * Delete a file or folder.
+		 *
+		 * @param uri The uri of the file that is to be deleted.
+		 */
+		deleteFile(uri: Uri, options?: { recursive?: boolean, ignoreIfNotExists?: boolean }): void;
+
+		/**
+		 * Rename a file or folder.
+		 *
+		 * @param oldUri The existing file.
+		 * @param newUri The new location.
+		 * @param options Defines if existing files should be overwritten or be
+		 * ignored. When overwrite and ignoreIfExists are both set overwrite wins.
+		 */
+		renameFile(oldUri: Uri, newUri: Uri, options?: { overwrite?: boolean, ignoreIfExists?: boolean }): void;
+
 
 		/**
 		 * Get all text edits grouped by resource.
@@ -5501,6 +5531,11 @@ declare module 'vscode' {
 		title: string;
 
 		/**
+		 * Icon for the panel shown in UI.
+		 */
+		iconPath?: Uri | { light: Uri; dark: Uri };
+
+		/**
 		 * Webview belonging to the panel.
 		 */
 		readonly webview: Webview;
@@ -6120,6 +6155,29 @@ declare module 'vscode' {
 		export function showInputBox(options?: InputBoxOptions, token?: CancellationToken): Thenable<string | undefined>;
 
 		/**
+		 * Creates a [QuickPick](#QuickPick) to let the user pick an item from a list
+		 * of items of type T.
+		 *
+		 * Note that in many cases the more convenient [window.showQuickPick](#window.showQuickPick)
+		 * is easier to use. [window.createQuickPick](#window.createQuickPick) should be used
+		 * when [window.showQuickPick](#window.showQuickPick) does not offer the required flexibility.
+		 *
+		 * @return A new [QuickPick](#QuickPick).
+		 */
+		export function createQuickPick<T extends QuickPickItem>(): QuickPick<T>;
+
+		/**
+		 * Creates a [InputBox](#InputBox) to let the user enter some text input.
+		 *
+		 * Note that in many cases the more convenient [window.showInputBox](#window.showInputBox)
+		 * is easier to use. [window.createInputBox](#window.createInputBox) should be used
+		 * when [window.showInputBox](#window.showInputBox) does not offer the required flexibility.
+		 *
+		 * @return A new [InputBox](#InputBox).
+		 */
+		export function createInputBox(): InputBox;
+
+		/**
 		 * Create a new [output channel](#OutputChannel) with the given name.
 		 *
 		 * @param name Human-readable string which will be used to represent the channel in the UI.
@@ -6584,6 +6642,264 @@ declare module 'vscode' {
 	}
 
 	/**
+	 * A light-weight user input UI that is intially not visible. After
+	 * configuring it through its properties the extension can make it
+	 * visible by calling [QuickInput.show](#QuickInput.show).
+	 *
+	 * There are several reasons why this UI might have to be hidden and
+	 * the extension will be notified through [QuickInput.onDidHide](#QuickInput.onDidHide).
+	 * (Examples include: an explict call to [QuickInput.hide](#QuickInput.hide),
+	 * the user pressing Esc, some other input UI opening, etc.)
+	 *
+	 * A user pressing Enter or some other gesture implying acceptance
+	 * of the current state does not automatically hide this UI component.
+	 * It is up to the extension to decide whether to accept the user's input
+	 * and if the UI should indeed be hidden through a call to [QuickInput.hide](#QuickInput.hide).
+	 *
+	 * When the extension no longer needs this input UI, it should
+	 * [QuickInput.dispose](#QuickInput.dispose) it to allow for freeing up
+	 * any resources associated with it.
+	 *
+	 * See [QuickPick](#QuickPick) and [InputBox](#InputBox) for concrete UIs.
+	 */
+	export interface QuickInput {
+
+		/**
+		 * An optional title.
+		 */
+		title: string | undefined;
+
+		/**
+		 * An optional current step count.
+		 */
+		step: number | undefined;
+
+		/**
+		 * An optional total step count.
+		 */
+		totalSteps: number | undefined;
+
+		/**
+		 * If the UI should allow for user input. Defaults to true.
+		 *
+		 * Change this to false, e.g., while validating user input or
+		 * loading data for the next step in user input.
+		 */
+		enabled: boolean;
+
+		/**
+		 * If the UI should show a progress indicator. Defaults to false.
+		 *
+		 * Change this to true, e.g., while loading more data or validating
+		 * user input.
+		 */
+		busy: boolean;
+
+		/**
+		 * If the UI should stay open even when loosing UI focus. Defaults to false.
+		 */
+		ignoreFocusOut: boolean;
+
+		/**
+		 * Makes the input UI visible in its current configuration. Any other input
+		 * UI will first fire an [QuickInput.onDidHide](#QuickInput.onDidHide) event.
+		 */
+		show(): void;
+
+		/**
+		 * Hides this input UI. This will also fire an [QuickInput.onDidHide](#QuickInput.onDidHide)
+		 * event.
+		 */
+		hide(): void;
+
+		/**
+		 * An event signaling when this input UI is hidden.
+		 *
+		 * There are several reasons why this UI might have to be hidden and
+		 * the extension will be notified through [QuickInput.onDidHide](#QuickInput.onDidHide).
+		 * (Examples include: an explict call to [QuickInput.hide](#QuickInput.hide),
+		 * the user pressing Esc, some other input UI opening, etc.)
+		 */
+		onDidHide: Event<void>;
+
+		/**
+		 * Dispose of this input UI and any associated resources. If it is still
+		 * visible, it is first hidden. After this call the input UI is no longer
+		 * functional and no additional methods or properties on it should be
+		 * accessed. Instead a new input UI should be created.
+		 */
+		dispose(): void;
+	}
+
+	/**
+	 * A concrete [QuickInput](#QuickInput) to let the user pick an item from a
+	 * list of items of type T. The items can be filtered through a filter text field and
+	 * there is an option [canSelectMany](#QuickPick.canSelectMany) to allow for
+	 * selecting multiple items.
+	 *
+	 * Note that in many cases the more convenient [window.showQuickPick](#window.showQuickPick)
+	 * is easier to use. [window.createQuickPick](#window.createQuickPick) should be used
+	 * when [window.showQuickPick](#window.showQuickPick) does not offer the required flexibility.
+	 */
+	export interface QuickPick<T extends QuickPickItem> extends QuickInput {
+
+		/**
+		 * Current value of the filter text.
+		 */
+		value: string;
+
+		/**
+		 * Optional placeholder in the filter text.
+		 */
+		placeholder: string | undefined;
+
+		/**
+		 * An event signaling when the value of the filter text has changed.
+		 */
+		readonly onDidChangeValue: Event<string>;
+
+		/**
+		 * An event signaling when the user indicated acceptance of the selected item(s).
+		 */
+		readonly onDidAccept: Event<void>;
+
+		/**
+		 * Buttons for actions in the UI.
+		 */
+		buttons: ReadonlyArray<QuickInputButton>;
+
+		/**
+		 * An event signaling when a button was triggered.
+		 */
+		readonly onDidTriggerButton: Event<QuickInputButton>;
+
+		/**
+		 * Items to pick from.
+		 */
+		items: ReadonlyArray<T>;
+
+		/**
+		 * If multiple items can be selected at the same time. Defaults to false.
+		 */
+		canSelectMany: boolean;
+
+		/**
+		 * If the filter text should also be matched against the description of the items. Defaults to false.
+		 */
+		matchOnDescription: boolean;
+
+		/**
+		 * If the filter text should also be matched against the detail of the items. Defaults to false.
+		 */
+		matchOnDetail: boolean;
+
+		/**
+		 * Active items. This can be read and updated by the extension.
+		 */
+		activeItems: ReadonlyArray<T>;
+
+		/**
+		 * An event signaling when the active items have changed.
+		 */
+		readonly onDidChangeActive: Event<T[]>;
+
+		/**
+		 * Selected items. This can be read and updated by the extension.
+		 */
+		selectedItems: ReadonlyArray<T>;
+
+		/**
+		 * An event signaling when the selected items have changed.
+		 */
+		readonly onDidChangeSelection: Event<T[]>;
+	}
+
+	/**
+	 * A concrete [QuickInput](#QuickInput) to let the user input a text value.
+	 *
+	 * Note that in many cases the more convenient [window.showInputBox](#window.showInputBox)
+	 * is easier to use. [window.createInputBox](#window.createInputBox) should be used
+	 * when [window.showInputBox](#window.showInputBox) does not offer the required flexibility.
+	 */
+	export interface InputBox extends QuickInput {
+
+		/**
+		 * Current input value.
+		 */
+		value: string;
+
+		/**
+		 * Optional placeholder in the filter text.
+		 */
+		placeholder: string | undefined;
+
+		/**
+		 * If the input value should be hidden. Defaults to false.
+		 */
+		password: boolean;
+
+		/**
+		 * An event signaling when the value has changed.
+		 */
+		readonly onDidChangeValue: Event<string>;
+
+		/**
+		 * An event signaling when the user indicated acceptance of the input value.
+		 */
+		readonly onDidAccept: Event<void>;
+
+		/**
+		 * Buttons for actions in the UI.
+		 */
+		buttons: ReadonlyArray<QuickInputButton>;
+
+		/**
+		 * An event signaling when a button was triggered.
+		 */
+		readonly onDidTriggerButton: Event<QuickInputButton>;
+
+		/**
+		 * An optional prompt text providing some ask or explanation to the user.
+		 */
+		prompt: string | undefined;
+
+		/**
+		 * An optional validation message indicating a problem with the current input value.
+		 */
+		validationMessage: string | undefined;
+	}
+
+	/**
+	 * Button for an action in a [QuickPick](#QuickPick) or [InputBox](#InputBox).
+	 */
+	export interface QuickInputButton {
+
+		/**
+		 * Icon for the button.
+		 */
+		readonly iconPath: Uri | { light: Uri; dark: Uri } | ThemeIcon;
+
+		/**
+		 * An optional tooltip.
+		 */
+		readonly tooltip?: string | undefined;
+	}
+
+	/**
+	 * Predefined buttons for [QuickPick](#QuickPick) and [InputBox](#InputBox).
+	 */
+	export namespace QuickInputButtons {
+
+		/**
+		 * A back button for [QuickPick](#QuickPick) and [InputBox](#InputBox).
+		 *
+		 * When a navigation 'back' button is needed this one should be used for consistency.
+		 * It comes with a predefined icon, tooltip and location.
+		 */
+		export const Back: QuickInputButton;
+	}
+
+	/**
 	 * An event describing an individual change in the text of a [document](#TextDocument).
 	 */
 	export interface TextDocumentContentChangeEvent {
@@ -6887,12 +7203,17 @@ declare module 'vscode' {
 		export function saveAll(includeUntitled?: boolean): Thenable<boolean>;
 
 		/**
-		 * Make changes to one or many resources as defined by the given
+		 * Make changes to one or many resources or create, delete, and rename resources as defined by the given
 		 * [workspace edit](#WorkspaceEdit).
 		 *
-		 * When applying a workspace edit, the editor implements an 'all-or-nothing'-strategy,
-		 * that means failure to load one document or make changes to one document will cause
-		 * the edit to be rejected.
+		 * All changes of a workspace edit are applied in the same order in which they have been added. If
+		 * multiple textual inserts are made at the same position, these strings appear in the resulting text
+		 * in the order the 'inserts' were made. Invalid sequences like 'delete file a' -> 'insert text in file a'
+		 * cause failure of the operation.
+		 *
+		 * When applying a workspace edit that consists only of text edits an 'all-or-nothing'-strategy is used.
+		 * A workspace edit with resource creations or deletions aborts the operation, e.g. consective edits will
+		 * not be attempted, when a single edit fails.
 		 *
 		 * @param edit A workspace edit.
 		 * @return A thenable that resolves when the edit could be applied.
