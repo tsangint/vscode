@@ -86,6 +86,9 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
 		referencesProvider: true,
 		definitionProvider: true,
 		documentHighlightProvider: true,
+		documentLinkProvider: {
+			resolveProvider: false
+		},
 		codeActionProvider: true,
 		renameProvider: true,
 		colorProvider: {},
@@ -248,6 +251,16 @@ connection.onDocumentHighlight((documentSymbolParams, token) => {
 		}
 		return [];
 	}, [], `Error while computing document highlights for ${documentSymbolParams.textDocument.uri}`, token);
+});
+
+connection.onDocumentLinks((documentSymbolParams, token) => {
+		const document = documents.get(documentSymbolParams.textDocument.uri);
+		if (document) {
+			const stylesheet = stylesheets.get(document);
+			const res = getLanguageService(document).findDocumentLinks(document, stylesheet);
+			return res;
+		}
+	return [];
 });
 
 connection.onReferences((referenceParams, token) => {
