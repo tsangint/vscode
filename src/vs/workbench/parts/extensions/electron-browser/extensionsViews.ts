@@ -218,7 +218,7 @@ export class ExtensionsListView extends ViewletPanel {
 			return new PagedModel(this.sortExtensions(result, options));
 		}
 
-		if (!value || ExtensionsListView.isInstalledExtensionsQuery(value)) {
+		if (!value || /@installed/i.test(value)) {
 			// Show installed extensions
 			value = value ? value.replace(/@installed/g, '').replace(/@sort:(\w+)(-\w*)?/g, '').trim().toLowerCase() : '';
 
@@ -623,7 +623,10 @@ export class ExtensionsListView extends ViewletPanel {
 	}
 
 	static isInstalledExtensionsQuery(query: string): boolean {
-		return /@installed/i.test(query);
+		return /@installed/i.test(query)
+			|| ExtensionsListView.isOutdatedExtensionsQuery(query)
+			|| ExtensionsListView.isDisabledExtensionsQuery(query)
+			|| ExtensionsListView.isEnabledExtensionsQuery(query);
 	}
 
 	static isGroupByServersExtensionsQuery(query: string): boolean {
@@ -667,31 +670,12 @@ export class ExtensionsListView extends ViewletPanel {
 	}
 }
 
-export class InstalledExtensionsView extends ExtensionsListView {
-
-	public static isInstalledExtensionsQuery(query: string): boolean {
-		return ExtensionsListView.isInstalledExtensionsQuery(query)
-			|| ExtensionsListView.isOutdatedExtensionsQuery(query)
-			|| ExtensionsListView.isDisabledExtensionsQuery(query)
-			|| ExtensionsListView.isEnabledExtensionsQuery(query);
-	}
-
-	async show(query: string): Promise<IPagedModel<IExtension>> {
-		if (InstalledExtensionsView.isInstalledExtensionsQuery(query)) {
-			return super.show(query);
-		}
-		let searchInstalledQuery = '@installed';
-		searchInstalledQuery = query ? searchInstalledQuery + ' ' + query : searchInstalledQuery;
-		return super.show(searchInstalledQuery);
-	}
-}
-
 export class GroupByServerExtensionsView extends ExtensionsListView {
 
 	async show(query: string): Promise<IPagedModel<IExtension>> {
 		query = query.replace(/@group:server/g, '').trim();
 		query = query ? query : '@installed';
-		if (!InstalledExtensionsView.isInstalledExtensionsQuery(query) && !ExtensionsListView.isBuiltInExtensionsQuery(query)) {
+		if (!ExtensionsListView.isInstalledExtensionsQuery(query) && !ExtensionsListView.isBuiltInExtensionsQuery(query)) {
 			query = query += ' @installed';
 		}
 		return super.show(query.trim());
