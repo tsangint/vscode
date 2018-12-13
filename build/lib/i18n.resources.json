@@ -241,6 +241,11 @@
 		{
 			"name": "vs/workbench/services/preferences",
 			"project": "vscode-preferences"
+		},
+		{
+			"name": "vs/workbench/parts/hippy",
+			"project": "vscode-workbench"
+
 		}
 	]
 }
