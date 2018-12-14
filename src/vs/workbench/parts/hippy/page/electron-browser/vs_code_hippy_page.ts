@@ -160,5 +160,7 @@ export default () => `
 <div class="hippyPageContainer">
 	<h3>Sketch2Hippy Workspace</h3>
 	${testSvg}
+	<br />
+	<iframe style="width:1200px;height:600px;" src="http://localhost:9230" />
 </div>
 `;

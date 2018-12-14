@@ -143,6 +143,9 @@ function configureCommandlineSwitches(cliArgs, nodeCachedDataDir) {
 	if (jsFlags) {
 		app.commandLine.appendSwitch('--js-flags', jsFlags);
 	}
+
+	// Hippy调试
+	app.commandLine.appendSwitch('remote-debugging-port', '9230');
 }
 
 /**
