@@ -27,6 +27,11 @@ export namespace Schemas {
 	export const walkThrough: string = 'walkThrough';
 
 	/**
+	 * A hippy document.
+	 */
+	export const hippy: string = 'hippy';
+
+	/**
 	 * An embedded code snippet.
 	 */
 	export const walkThroughSnippet: string = 'walkThroughSnippet';

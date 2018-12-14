@@ -379,6 +379,7 @@ function createStorageService(payload: IWorkspaceInitializationPayload, environm
 								'workbench.view.extensions.state',
 								'workbench.view.debug.state',
 								'memento/workbench.editor.walkThroughPart',
+								'memento/workbench.editor.hippyEditor',
 								'memento/workbench.editor.settings2',
 								'memento/workbench.editor.htmlPreviewPart',
 								'memento/workbench.editor.defaultPreferences',

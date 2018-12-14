@@ -12,6 +12,27 @@ import { SyncActionDescriptor, MenuRegistry, MenuId } from 'vs/platform/actions/
 import { IConfigurationRegistry, Extensions as ConfigurationExtensions } from 'vs/platform/configuration/common/configurationRegistry';
 import { IEditorInputFactoryRegistry, Extensions as EditorExtensions } from 'vs/workbench/common/editor';
 import { LifecyclePhase } from 'vs/platform/lifecycle/common/lifecycle';
+import { SyncDescriptor } from 'vs/platform/instantiation/common/descriptors';
+import { HippyEditorInput } from 'vs/workbench/parts/hippy/page/node/hippyEditorInput';
+import { IEditorRegistry, Extensions as BrowserEditorExtensions, EditorDescriptor } from 'vs/workbench/browser/editor';
+import { HippyEditor } from 'vs/workbench/parts/hippy/page/electron-browser/hippyEditor';
+// import { HippyContentProvider, HippySnippetContentProvider } from 'vs/workbench/parts/hippy/page/node/hippyContentProvider';
+
+Registry.as<IEditorRegistry>(BrowserEditorExtensions.Editors)
+	.registerEditor(new EditorDescriptor(
+		HippyEditor,
+		HippyEditor.ID,
+		'HippyEditor'
+	),
+		[new SyncDescriptor(HippyEditorInput)]);
+
+// Registry.as<IEditorInputFactoryRegistry>(EditorExtensions.EditorInputFactories).registerEditorInputFactory('workbench.editors.hippyEditorInput', EditorHippyInputFactory);
+
+// Registry.as<IWorkbenchContributionsRegistry>(WorkbenchExtensions.Workbench)
+// 	.registerWorkbenchContribution(HippyContentProvider, LifecyclePhase.Starting);
+
+// Registry.as<IWorkbenchContributionsRegistry>(WorkbenchExtensions.Workbench)
+// 	.registerWorkbenchContribution(HippySnippetContentProvider, LifecyclePhase.Starting);
 
 Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration)
 	.registerConfiguration({

@@ -14,7 +14,7 @@ import * as marked from 'vs/base/common/marked/marked';
 import { Schemas } from 'vs/base/common/network';
 import { IHashService } from 'vs/workbench/services/hash/common/hashService';
 
-export class WalkThroughModel extends EditorModel {
+export class HippyEditorModel extends EditorModel {
 
 	constructor(
 		private mainRef: IReference<ITextEditorModel>,
@@ -38,7 +38,7 @@ export class WalkThroughModel extends EditorModel {
 	}
 }
 
-export interface WalkThroughInputOptions {
+export interface HippyInputOptions {
 	readonly typeId: string;
 	readonly name: string;
 	readonly description?: string;
@@ -47,17 +47,17 @@ export interface WalkThroughInputOptions {
 	readonly onReady?: (container: HTMLElement) => void;
 }
 
-export class WalkThroughInput extends EditorInput {
+export class HippyEditorInput extends EditorInput {
 
 	private disposables: IDisposable[] = [];
 
-	private promise: TPromise<WalkThroughModel>;
+	private promise: TPromise<HippyEditorModel>;
 
 	private maxTopScroll = 0;
 	private maxBottomScroll = 0;
 
 	constructor(
-		private options: WalkThroughInputOptions,
+		private options: HippyInputOptions,
 		@ITextModelService private textModelResolverService: ITextModelService,
 		@IHashService private hashService: IHashService
 	) {
@@ -101,19 +101,19 @@ export class WalkThroughInput extends EditorInput {
 		return this.options.onReady;
 	}
 
-	resolve(): TPromise<WalkThroughModel> {
+	resolve(): TPromise<HippyEditorModel> {
 		if (!this.promise) {
 			this.promise = this.textModelResolverService.createModelReference(this.options.resource)
 				.then(ref => {
 					if (strings.endsWith(this.getResource().path, '.html')) {
-						return new WalkThroughModel(ref, []);
+						return new HippyEditorModel(ref, []);
 					}
 
 					const snippets: TPromise<IReference<ITextEditorModel>>[] = [];
 					let i = 0;
 					const renderer = new marked.Renderer();
 					renderer.code = (code, lang) => {
-						const resource = this.options.resource.with({ scheme: Schemas.walkThroughSnippet, fragment: `${i++}.${lang}` });
+						const resource = this.options.resource.with({ scheme: Schemas.walkThrough, fragment: `${i++}.${lang}` });
 						snippets.push(this.textModelResolverService.createModelReference(resource));
 						return '';
 					};
@@ -122,7 +122,7 @@ export class WalkThroughInput extends EditorInput {
 					marked(markdown, { renderer });
 
 					return TPromise.join(snippets)
-						.then(refs => new WalkThroughModel(ref, refs));
+						.then(refs => new HippyEditorModel(ref, refs));
 				});
 		}
 
@@ -134,10 +134,9 @@ export class WalkThroughInput extends EditorInput {
 			return true;
 		}
 
-		if (otherInput instanceof WalkThroughInput) {
-			let otherResourceEditorInput = <WalkThroughInput>otherInput;
+		if (otherInput instanceof HippyEditorInput) {
+			let otherResourceEditorInput = <HippyEditorInput>otherInput;
 
-			// Compare by properties
 			return otherResourceEditorInput.options.resource.toString() === this.options.resource.toString();
 		}
 

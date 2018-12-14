@@ -2,3 +2,12 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
+
+.monaco-workbench > .part.editor > .content .hippyPageContainer {
+	/* align-items: center; */
+	/* display: flex; */
+	/* justify-content: center; */
+	min-width: 100%;
+	min-height: 100%;
+	padding: 20px;
+}
