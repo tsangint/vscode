@@ -10,6 +10,15 @@ import { isUndefinedOrNull } from 'vs/base/common/types';
 
 export const IStorageService = createDecorator<IStorageService>('storageService');
 
+export enum WillSaveStateReason {
+	NONE = 0,
+	SHUTDOWN = 1
+}
+
+export interface IWillSaveStateEvent {
+	reason: WillSaveStateReason;
+}
+
 export interface IStorageService {
 	_serviceBrand: any;
 
@@ -22,8 +31,12 @@ export interface IStorageService {
 	 * Emitted when the storage is about to persist. This is the right time
 	 * to persist data to ensure it is stored before the application shuts
 	 * down.
+	 *
+	 * The will save state event allows to optionally ask for the reason of
+	 * saving the state, e.g. to find out if the state is saved due to a
+	 * shutdown.
 	 */
-	readonly onWillSaveState: Event<void>;
+	readonly onWillSaveState: Event<IWillSaveStateEvent>;
 
 	/**
 	 * Retrieve an element stored with the given key from storage. Use
@@ -58,13 +71,12 @@ export interface IStorageService {
 	getInteger<R extends number | undefined>(key: string, scope: StorageScope, fallbackValue?: number): number | undefined;
 
 	/**
-	 * Store a string value under the given key to storage. The value will
-	 * be converted to a string.
+	 * Store a value under the given key to storage. The value will be converted to a string.
 	 *
 	 * The scope argument allows to define the scope of the storage
 	 * operation to either the current workspace only or all workspaces.
 	 */
-	store(key: string, value: any, scope: StorageScope): void;
+	store(key: string, value: string | boolean | number, scope: StorageScope): void;
 
 	/**
 	 * Delete an element stored under the provided key from storage.
@@ -93,7 +105,7 @@ export interface IWorkspaceStorageChangeEvent {
 	scope: StorageScope;
 }
 
-export const InMemoryStorageService: IStorageService = new class extends Disposable implements IStorageService {
+export class InMemoryStorageService extends Disposable implements IStorageService {
 	_serviceBrand = undefined;
 
 	private _onDidChangeStorage: Emitter<IWorkspaceStorageChangeEvent> = this._register(new Emitter<IWorkspaceStorageChangeEvent>());
@@ -141,7 +153,7 @@ export const InMemoryStorageService: IStorageService = new class extends Disposa
 		return parseInt(value, 10);
 	}
 
-	store(key: string, value: any, scope: StorageScope): Promise<void> {
+	store(key: string, value: string | boolean | number, scope: StorageScope): Promise<void> {
 
 		// We remove the key for undefined/null values
 		if (isUndefinedOrNull(value)) {
@@ -177,4 +189,4 @@ export const InMemoryStorageService: IStorageService = new class extends Disposa
 
 		return Promise.resolve();
 	}
-};
+}

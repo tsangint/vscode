@@ -99,7 +99,7 @@ export interface IReplElementSource {
 
 export interface IExpressionContainer extends ITreeElement {
 	readonly hasChildren: boolean;
-	getChildren(): Promise<ReadonlyArray<IExpression>>;
+	getChildren(): Promise<IExpression[]>;
 }
 
 export interface IExpression extends IReplElement, IExpressionContainer {
@@ -112,7 +112,7 @@ export interface IExpression extends IReplElement, IExpressionContainer {
 export interface IDebugger {
 	createDebugAdapter(session: IDebugSession, outputService: IOutputService): Promise<IDebugAdapter>;
 	runInTerminal(args: DebugProtocol.RunInTerminalRequestArguments): Promise<number | undefined>;
-	getCustomTelemetryService(): Thenable<TelemetryService>;
+	getCustomTelemetryService(): Promise<TelemetryService>;
 }
 
 export const enum State {
@@ -158,10 +158,10 @@ export interface IDebugSession extends ITreeElement {
 	rawUpdate(data: IRawModelUpdate): void;
 
 	getThread(threadId: number): IThread;
-	getAllThreads(): ReadonlyArray<IThread>;
+	getAllThreads(): IThread[];
 	clearThreads(removeThreads: boolean, reference?: number): void;
 
-	getReplElements(): ReadonlyArray<IReplElement>;
+	getReplElements(): IReplElement[];
 
 	removeReplExpressions(): void;
 	addReplExpression(stackFrame: IStackFrame, name: string): Promise<void>;
@@ -186,7 +186,7 @@ export interface IDebugSession extends ITreeElement {
 
 	// DAP request
 
-	initialize(dbgr: IDebugger): Thenable<void>;
+	initialize(dbgr: IDebugger): Promise<void>;
 	launchOrAttach(config: IConfig): Promise<void>;
 	restart(): Promise<void>;
 	terminate(restart?: boolean /* false */): Promise<void>;
@@ -286,12 +286,12 @@ export interface IStackFrame extends ITreeElement {
 	readonly frameId: number;
 	readonly range: IRange;
 	readonly source: Source;
-	getScopes(): Promise<ReadonlyArray<IScope>>;
+	getScopes(): Promise<IScope[]>;
 	getMostSpecificScopes(range: IRange): Promise<ReadonlyArray<IScope>>;
 	getSpecificSourceName(): string;
 	restart(): Promise<any>;
 	toString(): string;
-	openInEditor(editorService: IEditorService, preserveFocus?: boolean, sideBySide?: boolean): Thenable<any>;
+	openInEditor(editorService: IEditorService, preserveFocus?: boolean, sideBySide?: boolean): Promise<any>;
 }
 
 export interface IEnablement extends ITreeElement {
@@ -380,16 +380,20 @@ export interface IViewModel extends ITreeElement {
 	onDidSelectExpression: Event<IExpression>;
 }
 
+export interface IEvaluate {
+	evaluate(session: IDebugSession, stackFrame: IStackFrame, context: string): Promise<void>;
+}
+
 export interface IDebugModel extends ITreeElement {
-	getSessions(includeInactive?: boolean): ReadonlyArray<IDebugSession>;
+	getSessions(includeInactive?: boolean): IDebugSession[];
 	getBreakpoints(filter?: { uri?: uri, lineNumber?: number, column?: number, enabledOnly?: boolean }): ReadonlyArray<IBreakpoint>;
 	areBreakpointsActivated(): boolean;
 	getFunctionBreakpoints(): ReadonlyArray<IFunctionBreakpoint>;
 	getExceptionBreakpoints(): ReadonlyArray<IExceptionBreakpoint>;
-	getWatchExpressions(): ReadonlyArray<IExpression>;
+	getWatchExpressions(): ReadonlyArray<IExpression & IEvaluate>;
 
 	onDidChangeBreakpoints: Event<IBreakpointsChangeEvent>;
-	onDidChangeCallStack: Event<void>;
+	onDidChangeCallStack: Event<IThread | undefined>;
 	onDidChangeWatchExpressions: Event<IExpression>;
 }
 
@@ -397,9 +401,9 @@ export interface IDebugModel extends ITreeElement {
  * An event describing a change to the set of [breakpoints](#debug.Breakpoint).
  */
 export interface IBreakpointsChangeEvent {
-	added?: (IBreakpoint | IFunctionBreakpoint)[];
-	removed?: (IBreakpoint | IFunctionBreakpoint)[];
-	changed?: (IBreakpoint | IFunctionBreakpoint)[];
+	added?: Array<IBreakpoint | IFunctionBreakpoint>;
+	removed?: Array<IBreakpoint | IFunctionBreakpoint>;
+	changed?: Array<IBreakpoint | IFunctionBreakpoint>;
 	sessionOnly?: boolean;
 }
 
@@ -534,12 +538,15 @@ export interface IDebugConfigurationProvider {
 	resolveDebugConfiguration?(folderUri: uri | undefined, debugConfiguration: IConfig): Promise<IConfig>;
 	provideDebugConfigurations?(folderUri: uri | undefined): Promise<IConfig[]>;
 	debugAdapterExecutable?(folderUri: uri | undefined): Promise<IAdapterDescriptor>;		// TODO@AW legacy
-	hasTracker: boolean;
 }
 
-export interface IDebugAdapterProvider {
+export interface IDebugAdapterDescriptorFactory {
 	readonly type: string;
-	provideDebugAdapter(session: IDebugSession): Promise<IAdapterDescriptor>;
+	createDebugAdapterDescriptor(session: IDebugSession): Promise<IAdapterDescriptor>;
+}
+
+export interface IDebugAdapterTrackerFactory {
+	readonly type: string;
 }
 
 export interface ITerminalLauncher {
@@ -586,7 +593,7 @@ export interface IConfigurationManager {
 	 */
 	onDidSelectConfiguration: Event<void>;
 
-	activateDebuggers(activationEvent: string, debugType?: string): Thenable<void>;
+	activateDebuggers(activationEvent: string, debugType?: string): Promise<void>;
 
 	needsToRunInExtHost(debugType: string): boolean;
 	hasDebugConfigurationProvider(debugType: string): boolean;
@@ -594,11 +601,14 @@ export interface IConfigurationManager {
 	registerDebugConfigurationProvider(debugConfigurationProvider: IDebugConfigurationProvider): IDisposable;
 	unregisterDebugConfigurationProvider(debugConfigurationProvider: IDebugConfigurationProvider): void;
 
-	registerDebugAdapterProvider(debugConfigurationProvider: IDebugAdapterProvider): IDisposable;
-	unregisterDebugAdapterProvider(debugConfigurationProvider: IDebugAdapterProvider): void;
+	registerDebugAdapterDescriptorFactory(debugAdapterDescriptorFactory: IDebugAdapterDescriptorFactory): IDisposable;
+	unregisterDebugAdapterDescriptorFactory(debugAdapterDescriptorFactory: IDebugAdapterDescriptorFactory): void;
 
-	resolveConfigurationByProviders(folderUri: uri | undefined, type: string | undefined, debugConfiguration: any): Thenable<any>;
-	provideDebugAdapter(session: IDebugSession): Promise<IAdapterDescriptor | undefined>;
+	registerDebugAdapterTrackerFactory(debugAdapterTrackerFactory: IDebugAdapterTrackerFactory): IDisposable;
+	unregisterDebugAdapterTrackerFactory(debugAdapterTrackerFactory: IDebugAdapterTrackerFactory): void;
+
+	resolveConfigurationByProviders(folderUri: uri | undefined, type: string | undefined, debugConfiguration: any): Promise<any>;
+	getDebugAdapterDescriptor(session: IDebugSession): Promise<IAdapterDescriptor | undefined>;
 
 	registerDebugAdapterFactory(debugTypes: string[], debugAdapterFactory: IDebugAdapterFactory): IDisposable;
 	createDebugAdapter(session: IDebugSession): IDebugAdapter;
@@ -650,7 +660,7 @@ export interface ILaunch {
 	/**
 	 * Opens the launch.json file. Creates if it does not exist.
 	 */
-	openConfigFile(sideBySide: boolean, preserveFocus: boolean, type?: string): Thenable<{ editor: IEditor, created: boolean }>;
+	openConfigFile(sideBySide: boolean, preserveFocus: boolean, type?: string): Promise<{ editor: IEditor, created: boolean }>;
 }
 
 // Debug service interfaces
@@ -774,12 +784,12 @@ export interface IDebugService {
 	 * Returns true if the start debugging was successfull. For compound launches, all configurations have to start successfuly for it to return success.
 	 * On errors the startDebugging will throw an error, however some error and cancelations are handled and in that case will simply return false.
 	 */
-	startDebugging(launch: ILaunch, configOrName?: IConfig | string, noDebug?: boolean): Thenable<boolean>;
+	startDebugging(launch: ILaunch, configOrName?: IConfig | string, noDebug?: boolean): Promise<boolean>;
 
 	/**
 	 * Restarts a session or creates a new one if there is no active session.
 	 */
-	restartSession(session: IDebugSession, restartData?: any): Thenable<any>;
+	restartSession(session: IDebugSession, restartData?: any): Promise<any>;
 
 	/**
 	 * Stops the session. If the session does not exist then stops all sessions.

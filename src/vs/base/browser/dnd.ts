@@ -27,7 +27,7 @@ export class DelayedDragHandler extends Disposable {
 		}));
 
 		['dragleave', 'drop', 'dragend'].forEach(type => {
-			this._register(addDisposableListener(container, type, () => {
+			this._register(addDisposableListener(container, type as 'dragleave' | 'drop' | 'dragend', () => {
 				this.clearDragTimeout();
 			}));
 		});
@@ -84,3 +84,16 @@ export function applyDragImage(event: DragEvent, label: string, clazz: string): 
 		setTimeout(() => document.body.removeChild(dragImage), 0);
 	}
 }
+
+export interface IDragAndDropData {
+	update(dataTransfer: DataTransfer): void;
+	getData(): any;
+}
+
+export interface IStaticDND {
+	CurrentDragAndDropData: IDragAndDropData | undefined;
+}
+
+export const StaticDND: IStaticDND = {
+	CurrentDragAndDropData: undefined
+};

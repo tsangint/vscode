@@ -89,6 +89,7 @@ export class ViewCursors extends ViewPart {
 		if (e.viewInfo) {
 			this._cursorBlinking = this._context.configuration.editor.viewInfo.cursorBlinking;
 			this._cursorStyle = this._context.configuration.editor.viewInfo.cursorStyle;
+			this._cursorSmoothCaretAnimation = this._context.configuration.editor.viewInfo.cursorSmoothCaretAnimation;
 		}
 
 		this._primaryCursor.onConfigurationChanged(e);
@@ -179,8 +180,8 @@ export class ViewCursors extends ViewPart {
 		if (shouldRender(this._primaryCursor.getPosition())) {
 			return true;
 		}
-		for (let i = 0; i < this._secondaryCursors.length; i++) {
-			if (shouldRender(this._secondaryCursors[i].getPosition())) {
+		for (const secondaryCursor of this._secondaryCursors) {
+			if (shouldRender(secondaryCursor.getPosition())) {
 				return true;
 			}
 		}

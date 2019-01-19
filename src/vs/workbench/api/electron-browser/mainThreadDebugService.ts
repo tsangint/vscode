@@ -5,7 +5,7 @@
 
 import { IDisposable, dispose } from 'vs/base/common/lifecycle';
 import { URI as uri } from 'vs/base/common/uri';
-import { IDebugService, IConfig, IDebugConfigurationProvider, IBreakpoint, IFunctionBreakpoint, IBreakpointData, ITerminalSettings, IDebugAdapter, IDebugAdapterProvider, IDebugSession, IDebugAdapterFactory } from 'vs/workbench/parts/debug/common/debug';
+import { IDebugService, IConfig, IDebugConfigurationProvider, IBreakpoint, IFunctionBreakpoint, IBreakpointData, ITerminalSettings, IDebugAdapter, IDebugAdapterDescriptorFactory, IDebugSession, IDebugAdapterFactory, IDebugAdapterTrackerFactory } from 'vs/workbench/parts/debug/common/debug';
 import {
 	ExtHostContext, ExtHostDebugServiceShape, MainThreadDebugServiceShape, DebugSessionUUID, MainContext,
 	IExtHostContext, IBreakpointsDeltaDto, ISourceMultiBreakpointDto, ISourceBreakpointDto, IFunctionBreakpointDto, IDebugSessionDto
@@ -25,12 +25,13 @@ export class MainThreadDebugService implements MainThreadDebugServiceShape, IDeb
 	private _debugAdapters: Map<number, ExtensionHostDebugAdapter>;
 	private _debugAdaptersHandleCounter = 1;
 	private _debugConfigurationProviders: Map<number, IDebugConfigurationProvider>;
-	private _debugAdapterProviders: Map<number, IDebugAdapterProvider>;
+	private _debugAdapterDescriptorFactories: Map<number, IDebugAdapterDescriptorFactory>;
+	private _debugAdapterTrackerFactories: Map<number, IDebugAdapterTrackerFactory>;
 	private _sessions: Set<DebugSessionUUID>;
 
 	constructor(
 		extHostContext: IExtHostContext,
-		@IDebugService private debugService: IDebugService
+		@IDebugService private readonly debugService: IDebugService
 	) {
 		this._proxy = extHostContext.getProxy(ExtHostContext.ExtHostDebugService);
 		this._toDispose = [];
@@ -51,7 +52,8 @@ export class MainThreadDebugService implements MainThreadDebugServiceShape, IDeb
 
 		this._debugAdapters = new Map();
 		this._debugConfigurationProviders = new Map();
-		this._debugAdapterProviders = new Map();
+		this._debugAdapterDescriptorFactories = new Map();
+		this._debugAdapterTrackerFactories = new Map();
 		this._sessions = new Set();
 	}
 
@@ -119,7 +121,7 @@ export class MainThreadDebugService implements MainThreadDebugServiceShape, IDeb
 		}
 	}
 
-	public $registerBreakpoints(DTOs: (ISourceMultiBreakpointDto | IFunctionBreakpointDto)[]): Thenable<void> {
+	public $registerBreakpoints(DTOs: Array<ISourceMultiBreakpointDto | IFunctionBreakpointDto>): Promise<void> {
 
 		for (let dto of DTOs) {
 			if (dto.type === 'sourceMulti') {
@@ -139,21 +141,20 @@ export class MainThreadDebugService implements MainThreadDebugServiceShape, IDeb
 				this.debugService.addFunctionBreakpoint(dto.functionName, dto.id);
 			}
 		}
-		return void 0;
+		return undefined;
 	}
 
-	public $unregisterBreakpoints(breakpointIds: string[], functionBreakpointIds: string[]): Thenable<void> {
+	public $unregisterBreakpoints(breakpointIds: string[], functionBreakpointIds: string[]): Promise<void> {
 		breakpointIds.forEach(id => this.debugService.removeBreakpoints(id));
 		functionBreakpointIds.forEach(id => this.debugService.removeFunctionBreakpoints(id));
-		return void 0;
+		return undefined;
 	}
 
 
-	public $registerDebugConfigurationProvider(debugType: string, hasProvide: boolean, hasResolve: boolean, hasProvideDebugAdapter: boolean, hasTracker: boolean, handle: number): Thenable<void> {
+	public $registerDebugConfigurationProvider(debugType: string, hasProvide: boolean, hasResolve: boolean, hasProvideDebugAdapter: boolean, handle: number): Promise<void> {
 
 		const provider = <IDebugConfigurationProvider>{
-			type: debugType,
-			hasTracker: hasTracker
+			type: debugType
 		};
 		if (hasProvide) {
 			provider.provideDebugConfigurations = (folder) => {
@@ -166,6 +167,7 @@ export class MainThreadDebugService implements MainThreadDebugServiceShape, IDeb
 			};
 		}
 		if (hasProvideDebugAdapter) {
+			console.info('DebugConfigurationProvider.debugAdapterExecutable is deprecated and will be removed soon; please use DebugAdapterDescriptorFactory.createDebugAdapterDescriptor instead.');
 			provider.debugAdapterExecutable = (folder) => {
 				return Promise.resolve(this._proxy.$legacyDebugAdapterExecutable(handle, folder));
 			};
@@ -184,29 +186,47 @@ export class MainThreadDebugService implements MainThreadDebugServiceShape, IDeb
 		}
 	}
 
-	public $registerDebugAdapterProvider(debugType: string, handle: number): Thenable<void> {
+	public $registerDebugAdapterDescriptorFactory(debugType: string, handle: number): Promise<void> {
 
-		const provider = <IDebugAdapterProvider>{
+		const provider = <IDebugAdapterDescriptorFactory>{
 			type: debugType,
-			provideDebugAdapter: session => {
+			createDebugAdapterDescriptor: session => {
 				return Promise.resolve(this._proxy.$provideDebugAdapter(handle, this.getSessionDto(session)));
 			}
 		};
-		this._debugAdapterProviders.set(handle, provider);
-		this._toDispose.push(this.debugService.getConfigurationManager().registerDebugAdapterProvider(provider));
+		this._debugAdapterDescriptorFactories.set(handle, provider);
+		this._toDispose.push(this.debugService.getConfigurationManager().registerDebugAdapterDescriptorFactory(provider));
 
 		return Promise.resolve(undefined);
 	}
 
-	public $unregisterDebugAdapterProvider(handle: number): void {
-		const provider = this._debugAdapterProviders.get(handle);
+	public $unregisterDebugAdapterDescriptorFactory(handle: number): void {
+		const provider = this._debugAdapterDescriptorFactories.get(handle);
 		if (provider) {
-			this._debugAdapterProviders.delete(handle);
-			this.debugService.getConfigurationManager().unregisterDebugAdapterProvider(provider);
+			this._debugAdapterDescriptorFactories.delete(handle);
+			this.debugService.getConfigurationManager().unregisterDebugAdapterDescriptorFactory(provider);
 		}
 	}
 
-	public $startDebugging(_folderUri: uri | undefined, nameOrConfiguration: string | IConfig): Thenable<boolean> {
+	public $registerDebugAdapterTrackerFactory(debugType: string, handle: number) {
+		const factory = <IDebugAdapterTrackerFactory>{
+			type: debugType,
+		};
+		this._debugAdapterTrackerFactories.set(handle, factory);
+		this._toDispose.push(this.debugService.getConfigurationManager().registerDebugAdapterTrackerFactory(factory));
+
+		return Promise.resolve(undefined);
+	}
+
+	public $unregisterDebugAdapterTrackerFactory(handle: number) {
+		const factory = this._debugAdapterTrackerFactories.get(handle);
+		if (factory) {
+			this._debugAdapterTrackerFactories.delete(handle);
+			this.debugService.getConfigurationManager().unregisterDebugAdapterTrackerFactory(factory);
+		}
+	}
+
+	public $startDebugging(_folderUri: uri | undefined, nameOrConfiguration: string | IConfig): Promise<boolean> {
 		const folderUri = _folderUri ? uri.revive(_folderUri) : undefined;
 		const launch = this.debugService.getConfigurationManager().getLaunch(folderUri);
 		return this.debugService.startDebugging(launch, nameOrConfiguration).then(success => {
@@ -216,7 +236,7 @@ export class MainThreadDebugService implements MainThreadDebugServiceShape, IDeb
 		});
 	}
 
-	public $customDebugAdapterRequest(sessionId: DebugSessionUUID, request: string, args: any): Thenable<any> {
+	public $customDebugAdapterRequest(sessionId: DebugSessionUUID, request: string, args: any): Promise<any> {
 		const session = this.debugService.getModel().getSessions(true).filter(s => s.getId() === sessionId).pop();
 		if (session) {
 			return session.customRequest(request, args).then(response => {
@@ -272,7 +292,7 @@ export class MainThreadDebugService implements MainThreadDebugServiceShape, IDeb
 		return undefined;
 	}
 
-	private convertToDto(bps: (ReadonlyArray<IBreakpoint | IFunctionBreakpoint>)): (ISourceBreakpointDto | IFunctionBreakpointDto)[] {
+	private convertToDto(bps: (ReadonlyArray<IBreakpoint | IFunctionBreakpoint>)): Array<ISourceBreakpointDto | IFunctionBreakpointDto> {
 		return bps.map(bp => {
 			if ('name' in bp) {
 				const fbp = <IFunctionBreakpoint>bp;

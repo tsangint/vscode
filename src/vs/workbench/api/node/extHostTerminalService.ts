@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import * as os from 'os';
+import { URI, UriComponents } from 'vs/base/common/uri';
 import * as platform from 'vs/base/common/platform';
 import * as terminalEnvironment from 'vs/workbench/parts/terminal/node/terminalEnvironment';
 import { Event, Emitter } from 'vs/base/common/event';
@@ -74,7 +74,7 @@ export class ExtHostTerminal extends BaseExtHostTerminal implements vscode.Termi
 	private _pidPromise: Promise<number>;
 	private _pidPromiseComplete: (value: number) => any;
 
-	private readonly _onData: Emitter<string> = new Emitter<string>();
+	private readonly _onData = new Emitter<string>();
 	public get onDidWriteData(): Event<string> {
 		// Tell the main side to start sending data if it's not already
 		this._idPromise.then(c => {
@@ -102,12 +102,14 @@ export class ExtHostTerminal extends BaseExtHostTerminal implements vscode.Termi
 	public create(
 		shellPath?: string,
 		shellArgs?: string[],
-		cwd?: string,
+		cwd?: string | URI,
 		env?: { [key: string]: string },
-		waitOnExit?: boolean
+		waitOnExit?: boolean,
+		strictEnv?: boolean
 	): void {
-		this._proxy.$createTerminal(this._name, shellPath, shellArgs, cwd, env, waitOnExit).then((id) => {
-			this._runQueuedRequests(id);
+		this._proxy.$createTerminal(this._name, shellPath, shellArgs, cwd, env, waitOnExit, strictEnv).then(terminal => {
+			this._name = terminal.name;
+			this._runQueuedRequests(terminal.id);
 		});
 	}
 
@@ -119,7 +121,7 @@ export class ExtHostTerminal extends BaseExtHostTerminal implements vscode.Termi
 		this._name = name;
 	}
 
-	public get processId(): Thenable<number> {
+	public get processId(): Promise<number> {
 		return this._pidPromise;
 	}
 
@@ -143,6 +145,13 @@ export class ExtHostTerminal extends BaseExtHostTerminal implements vscode.Termi
 		if (this._pidPromiseComplete) {
 			this._pidPromiseComplete(processId);
 			this._pidPromiseComplete = null;
+		} else {
+			// Recreate the promise if this is the nth processId set (eg. reused task terminals)
+			this._pidPromise.then(pid => {
+				if (pid !== processId) {
+					this._pidPromise = Promise.resolve(processId);
+				}
+			});
 		}
 	}
 
@@ -159,7 +168,7 @@ export class ExtHostTerminalRenderer extends BaseExtHostTerminal implements vsco
 		this._queueApiRequest(this._proxy.$terminalRendererSetName, [this._name]);
 	}
 
-	private readonly _onInput: Emitter<string> = new Emitter<string>();
+	private readonly _onInput = new Emitter<string>();
 	public get onDidAcceptInput(): Event<string> {
 		this._checkDisposed();
 		this._queueApiRequest(this._proxy.$terminalRendererRegisterOnInputListener, [this._id]);
@@ -261,7 +270,7 @@ export class ExtHostTerminalService implements ExtHostTerminalServiceShape {
 
 	public createTerminalFromOptions(options: vscode.TerminalOptions): vscode.Terminal {
 		const terminal = new ExtHostTerminal(this._proxy, options.name);
-		terminal.create(options.shellPath, options.shellArgs, options.cwd, options.env /*, options.waitOnExit*/);
+		terminal.create(options.shellPath, options.shellArgs, options.cwd, options.env, /*options.waitOnExit*/ undefined, options.strictEnv);
 		this._terminals.push(terminal);
 		return terminal;
 	}
@@ -365,11 +374,11 @@ export class ExtHostTerminalService implements ExtHostTerminalServiceShape {
 		}
 	}
 
-	public $createProcess(id: number, shellLaunchConfig: ShellLaunchConfigDto, cols: number, rows: number): void {
+	public async $createProcess(id: number, shellLaunchConfig: ShellLaunchConfigDto, activeWorkspaceRootUriComponents: UriComponents, cols: number, rows: number): Promise<void> {
 		// TODO: This function duplicates a lot of TerminalProcessManager.createProcess, ideally
 		// they would be merged into a single implementation.
-
-		const terminalConfig = this._extHostConfiguration.getConfiguration('terminal.integrated');
+		const configProvider = await this._extHostConfiguration.getConfigProvider();
+		const terminalConfig = configProvider.getConfiguration('terminal.integrated');
 
 		if (!shellLaunchConfig.executable) {
 			// TODO: This duplicates some of TerminalConfigHelper.mergeDefaultShellPathAndArgs and should be merged
@@ -383,10 +392,9 @@ export class ExtHostTerminalService implements ExtHostTerminalServiceShape {
 			shellLaunchConfig.args = shellArgsConfigValue;
 		}
 
-		// TODO: Base the cwd on the last active workspace root
-		// const lastActiveWorkspaceRootUri = this._historyService.getLastActiveWorkspaceRoot(Schemas.file);
-		// this.initialCwd = terminalEnvironment.getCwd(shellLaunchConfig, lastActiveWorkspaceRootUri, this._configHelper);
-		const initialCwd = os.homedir();
+		// TODO: @daniel
+		const activeWorkspaceRootUri = URI.revive(activeWorkspaceRootUriComponents);
+		const initialCwd = terminalEnvironment.getCwd(shellLaunchConfig, activeWorkspaceRootUri, terminalConfig.cwd);
 
 		// TODO: Pull in and resolve config settings
 		// // Resolve env vars from config and shell
@@ -402,12 +410,11 @@ export class ExtHostTerminalService implements ExtHostTerminalServiceShape {
 
 		// Continue env initialization, merging in the env from the launch
 		// config and adding keys that are needed to create the process
-		const locale = terminalConfig.get('setLocaleVariables') ? platform.locale : undefined;
-		terminalEnvironment.addTerminalEnvironmentKeys(env, locale);
+		terminalEnvironment.addTerminalEnvironmentKeys(env, platform.locale, terminalConfig.get('setLocaleVariables'));
 
 		// Fork the process and listen for messages
 		this._logService.debug(`Terminal process launching on ext host`, shellLaunchConfig, initialCwd, cols, rows, env);
-		this._terminalProcesses[id] = new TerminalProcess(shellLaunchConfig, initialCwd, cols, rows, env);
+		this._terminalProcesses[id] = new TerminalProcess(shellLaunchConfig, initialCwd, cols, rows, env, terminalConfig.get('windowsEnableConpty'));
 		this._terminalProcesses[id].onProcessIdReady(pid => this._proxy.$sendProcessPid(id, pid));
 		this._terminalProcesses[id].onProcessTitleChanged(title => this._proxy.$sendProcessTitle(id, title));
 		this._terminalProcesses[id].onProcessData(data => this._proxy.$sendProcessData(id, data));

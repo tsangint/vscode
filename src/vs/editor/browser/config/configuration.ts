@@ -76,7 +76,9 @@ export function restoreFontInfo(storageService: IStorageService): void {
 
 export function saveFontInfo(storageService: IStorageService): void {
 	let knownFontInfo = CSSBasedConfiguration.INSTANCE.saveFontInfo();
-	storageService.store('editorFontInfo', JSON.stringify(knownFontInfo), StorageScope.GLOBAL);
+	if (knownFontInfo.length > 0) {
+		storageService.store('editorFontInfo', JSON.stringify(knownFontInfo), StorageScope.GLOBAL);
+	}
 }
 
 export interface ISerializedFontInfo {
@@ -343,14 +345,9 @@ export class Configuration extends CommonEditorConfiguration {
 
 	private _getExtraEditorClassName(): string {
 		let extra = '';
-		if (browser.isIE) {
-			extra += 'ie ';
-		} else if (browser.isFirefox) {
-			extra += 'ff ';
-		} else if (browser.isEdge) {
-			extra += 'edge ';
-		} else if (browser.isSafari) {
-			extra += 'safari ';
+		if (!browser.isSafari && !browser.isWebkitWebView) {
+			// Use user-select: none in all browsers except Safari and native macOS WebView
+			extra += 'no-user-select ';
 		}
 		if (platform.isMacintosh) {
 			extra += 'mac ';

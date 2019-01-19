@@ -13,7 +13,6 @@ import { Action } from 'vs/base/common/actions';
 import { KeyCode } from 'vs/base/common/keyCodes';
 import { dispose } from 'vs/base/common/lifecycle';
 import { URI } from 'vs/base/common/uri';
-import { TPromise } from 'vs/base/common/winjs.base';
 import { SyncActionDescriptor } from 'vs/platform/actions/common/actions';
 import { IContextMenuService } from 'vs/platform/contextview/browser/contextView';
 import { Registry } from 'vs/platform/registry/common/platform';
@@ -37,14 +36,14 @@ export class ViewletActivityAction extends ActivityAction {
 
 	constructor(
 		activity: IActivity,
-		@IViewletService private viewletService: IViewletService,
-		@IPartService private partService: IPartService,
-		@ITelemetryService private telemetryService: ITelemetryService
+		@IViewletService private readonly viewletService: IViewletService,
+		@IPartService private readonly partService: IPartService,
+		@ITelemetryService private readonly telemetryService: ITelemetryService
 	) {
 		super(activity);
 	}
 
-	run(event: any): Thenable<any> {
+	run(event: any): Promise<any> {
 		if (event instanceof MouseEvent && event.button === 2) {
 			return Promise.resolve(false); // do not run on right click
 		}
@@ -85,13 +84,13 @@ export class ToggleViewletAction extends Action {
 
 	constructor(
 		private _viewlet: ViewletDescriptor,
-		@IPartService private partService: IPartService,
-		@IViewletService private viewletService: IViewletService
+		@IPartService private readonly partService: IPartService,
+		@IViewletService private readonly viewletService: IViewletService
 	) {
 		super(_viewlet.id, _viewlet.name);
 	}
 
-	run(): Thenable<any> {
+	run(): Promise<any> {
 		const sideBarVisible = this.partService.isVisible(Parts.SIDEBAR_PART);
 		const activeViewlet = this.viewletService.getActiveViewlet();
 
@@ -188,7 +187,7 @@ export class PlaceHolderViewletActivityAction extends ViewletActivityAction {
 export class PlaceHolderToggleCompositePinnedAction extends ToggleCompositePinnedAction {
 
 	constructor(id: string, compositeBar: ICompositeBar) {
-		super({ id, name: id, cssClass: void 0 }, compositeBar);
+		super({ id, name: id, cssClass: undefined }, compositeBar);
 	}
 
 	setActivity(activity: IActivity): void {
@@ -201,18 +200,18 @@ class SwitchSideBarViewAction extends Action {
 	constructor(
 		id: string,
 		name: string,
-		@IViewletService private viewletService: IViewletService,
-		@IActivityService private activityService: IActivityService
+		@IViewletService private readonly viewletService: IViewletService,
+		@IActivityService private readonly activityService: IActivityService
 	) {
 		super(id, name);
 	}
 
-	run(offset: number): TPromise<any> {
+	run(offset: number): Promise<any> {
 		const pinnedViewletIds = this.activityService.getPinnedViewletIds();
 
 		const activeViewlet = this.viewletService.getActiveViewlet();
 		if (!activeViewlet) {
-			return TPromise.as(null);
+			return Promise.resolve(null);
 		}
 		let targetViewletId: string;
 		for (let i = 0; i < pinnedViewletIds.length; i++) {
@@ -239,7 +238,7 @@ export class PreviousSideBarViewAction extends SwitchSideBarViewAction {
 		super(id, name, viewletService, activityService);
 	}
 
-	run(): TPromise<any> {
+	run(): Promise<any> {
 		return super.run(-1);
 	}
 }
@@ -258,7 +257,7 @@ export class NextSideBarViewAction extends SwitchSideBarViewAction {
 		super(id, name, viewletService, activityService);
 	}
 
-	run(): TPromise<any> {
+	run(): Promise<any> {
 		return super.run(1);
 	}
 }

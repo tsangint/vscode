@@ -4,17 +4,17 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as crypto from 'crypto';
-
-import { URI } from 'vs/base/common/uri';
-import { illegalArgument } from 'vs/base/common/errors';
-import * as vscode from 'vscode';
-import { isMarkdownString } from 'vs/base/common/htmlContent';
-import { IRelativePattern } from 'vs/base/common/glob';
 import { relative } from 'path';
-import { startsWith } from 'vs/base/common/strings';
-import { values } from 'vs/base/common/map';
 import { coalesce, equals } from 'vs/base/common/arrays';
+import { illegalArgument } from 'vs/base/common/errors';
+import { IRelativePattern } from 'vs/base/common/glob';
+import { isMarkdownString } from 'vs/base/common/htmlContent';
+import { values } from 'vs/base/common/map';
+import { startsWith } from 'vs/base/common/strings';
+import { URI } from 'vs/base/common/uri';
 import { generateUuid } from 'vs/base/common/uuid';
+import * as vscode from 'vscode';
+
 
 export class Disposable {
 
@@ -32,9 +32,9 @@ export class Disposable {
 		});
 	}
 
-	private _callOnDispose?: Function;
+	private _callOnDispose?: () => any;
 
-	constructor(callOnDispose: Function) {
+	constructor(callOnDispose: () => any) {
 		this._callOnDispose = callOnDispose;
 	}
 
@@ -1036,6 +1036,36 @@ export class CodeActionKind {
 	}
 }
 
+export class SelectionRangeKind {
+
+	private static readonly _sep = '.';
+
+	static readonly Empty = new SelectionRangeKind('');
+	static readonly Statement = SelectionRangeKind.Empty.append('statement');
+	static readonly Declaration = SelectionRangeKind.Empty.append('declaration');
+
+	readonly value: string;
+
+	constructor(value: string) {
+		this.value = value;
+	}
+
+	append(value: string): SelectionRangeKind {
+		return new SelectionRangeKind(this.value ? this.value + SelectionRangeKind._sep + value : value);
+	}
+}
+
+export class SelectionRange {
+
+	kind: SelectionRangeKind;
+	range: Range;
+
+	constructor(range: Range, kind: SelectionRangeKind, ) {
+		this.range = range;
+		this.kind = kind;
+	}
+}
+
 
 export class CodeLens {
 
@@ -1118,7 +1148,7 @@ export class SignatureHelp {
 	}
 }
 
-export enum SignatureHelpTriggerReason {
+export enum SignatureHelpTriggerKind {
 	Invoke = 1,
 	TriggerCharacter = 2,
 	ContentChange = 3,
@@ -1427,7 +1457,7 @@ export class ProcessExecution implements vscode.ProcessExecution {
 
 	private _process: string;
 	private _args: string[];
-	private _options: vscode.ProcessExecutionOptions;
+	private _options: vscode.ProcessExecutionOptions | undefined;
 
 	constructor(process: string, options?: vscode.ProcessExecutionOptions);
 	constructor(process: string, args: string[], options?: vscode.ProcessExecutionOptions);
@@ -1436,7 +1466,7 @@ export class ProcessExecution implements vscode.ProcessExecution {
 			throw illegalArgument('process');
 		}
 		this._process = process;
-		if (varg1 !== void 0) {
+		if (varg1 !== undefined) {
 			if (Array.isArray(varg1)) {
 				this._args = varg1;
 				this._options = varg2;
@@ -1444,7 +1474,7 @@ export class ProcessExecution implements vscode.ProcessExecution {
 				this._options = varg1;
 			}
 		}
-		if (this._args === void 0) {
+		if (this._args === undefined) {
 			this._args = [];
 		}
 	}
@@ -1472,18 +1502,18 @@ export class ProcessExecution implements vscode.ProcessExecution {
 		this._args = value;
 	}
 
-	get options(): vscode.ProcessExecutionOptions {
+	get options(): vscode.ProcessExecutionOptions | undefined {
 		return this._options;
 	}
 
-	set options(value: vscode.ProcessExecutionOptions) {
+	set options(value: vscode.ProcessExecutionOptions | undefined) {
 		this._options = value;
 	}
 
 	public computeId(): string {
 		const hash = crypto.createHash('md5');
 		hash.update('process');
-		if (this._process !== void 0) {
+		if (this._process !== undefined) {
 			hash.update(this._process);
 		}
 		if (this._args && this._args.length > 0) {
@@ -1500,7 +1530,7 @@ export class ShellExecution implements vscode.ShellExecution {
 	private _commandLine: string;
 	private _command: string | vscode.ShellQuotedString;
 	private _args: (string | vscode.ShellQuotedString)[];
-	private _options: vscode.ShellExecutionOptions;
+	private _options: vscode.ShellExecutionOptions | undefined;
 
 	constructor(commandLine: string, options?: vscode.ShellExecutionOptions);
 	constructor(command: string | vscode.ShellQuotedString, args: (string | vscode.ShellQuotedString)[], options?: vscode.ShellExecutionOptions);
@@ -1554,21 +1584,21 @@ export class ShellExecution implements vscode.ShellExecution {
 		this._args = value || [];
 	}
 
-	get options(): vscode.ShellExecutionOptions {
+	get options(): vscode.ShellExecutionOptions | undefined {
 		return this._options;
 	}
 
-	set options(value: vscode.ShellExecutionOptions) {
+	set options(value: vscode.ShellExecutionOptions | undefined) {
 		this._options = value;
 	}
 
 	public computeId(): string {
 		const hash = crypto.createHash('md5');
 		hash.update('shell');
-		if (this._commandLine !== void 0) {
+		if (this._commandLine !== undefined) {
 			hash.update(this._commandLine);
 		}
-		if (this._command !== void 0) {
+		if (this._command !== undefined) {
 			hash.update(typeof this._command === 'string' ? this._command : this._command.value);
 		}
 		if (this._args && this._args.length > 0) {
@@ -1591,24 +1621,23 @@ export enum TaskScope {
 	Workspace = 2
 }
 
-export enum RerunBehavior {
-	reevaluate = 1,
-	useEvaluated = 2,
-}
+export class Task implements vscode.Task {
 
-export class Task implements vscode.Task2 {
+	private static ProcessType: string = 'process';
+	private static ShellType: string = 'shell';
+	private static EmptyType: string = '$empty';
 
-	private __id: string;
+	private __id: string | undefined;
 
 	private _definition: vscode.TaskDefinition;
-	private _scope: vscode.TaskScope.Global | vscode.TaskScope.Workspace | vscode.WorkspaceFolder;
+	private _scope: vscode.TaskScope.Global | vscode.TaskScope.Workspace | vscode.WorkspaceFolder | undefined;
 	private _name: string;
-	private _execution: ProcessExecution | ShellExecution;
+	private _execution: ProcessExecution | ShellExecution | undefined;
 	private _problemMatchers: string[];
 	private _hasDefinedMatchers: boolean;
 	private _isBackground: boolean;
 	private _source: string;
-	private _group: TaskGroup;
+	private _group: TaskGroup | undefined;
 	private _presentationOptions: vscode.TaskPresentationOptions;
 	private _runOptions: vscode.RunOptions;
 
@@ -1646,32 +1675,42 @@ export class Task implements vscode.Task2 {
 			this._hasDefinedMatchers = false;
 		}
 		this._isBackground = false;
+		this._presentationOptions = Object.create(null);
+		this._runOptions = Object.create(null);
 	}
 
-	get _id(): string {
+	get _id(): string | undefined {
 		return this.__id;
 	}
 
-	set _id(value: string) {
+	set _id(value: string | undefined) {
 		this.__id = value;
 	}
 
 	private clear(): void {
-		if (this.__id === void 0) {
+		if (this.__id === undefined) {
 			return;
 		}
 		this.__id = undefined;
 		this._scope = undefined;
-		this._definition = undefined;
+		this.computeDefinitionBasedOnExecution();
+	}
+
+	private computeDefinitionBasedOnExecution(): void {
 		if (this._execution instanceof ProcessExecution) {
 			this._definition = {
-				type: 'process',
+				type: Task.ProcessType,
 				id: this._execution.computeId()
 			};
 		} else if (this._execution instanceof ShellExecution) {
 			this._definition = {
-				type: 'shell',
+				type: Task.ShellType,
 				id: this._execution.computeId()
+			};
+		} else {
+			this._definition = {
+				type: Task.EmptyType,
+				id: generateUuid()
 			};
 		}
 	}
@@ -1681,14 +1720,14 @@ export class Task implements vscode.Task2 {
 	}
 
 	set definition(value: vscode.TaskDefinition) {
-		if (value === void 0 || value === null) {
+		if (value === undefined || value === null) {
 			throw illegalArgument('Kind can\'t be undefined or null');
 		}
 		this.clear();
 		this._definition = value;
 	}
 
-	get scope(): vscode.TaskScope.Global | vscode.TaskScope.Workspace | vscode.WorkspaceFolder {
+	get scope(): vscode.TaskScope.Global | vscode.TaskScope.Workspace | vscode.WorkspaceFolder | undefined {
 		return this._scope;
 	}
 
@@ -1709,16 +1748,20 @@ export class Task implements vscode.Task2 {
 		this._name = value;
 	}
 
-	get execution(): ProcessExecution | ShellExecution {
+	get execution(): ProcessExecution | ShellExecution | undefined {
 		return this._execution;
 	}
 
-	set execution(value: ProcessExecution | ShellExecution) {
+	set execution(value: ProcessExecution | ShellExecution | undefined) {
 		if (value === null) {
 			value = undefined;
 		}
 		this.clear();
 		this._execution = value;
+		let type = this._definition.type;
+		if (Task.EmptyType === type || Task.ProcessType === type || Task.ShellType === type) {
+			this.computeDefinitionBasedOnExecution();
+		}
 	}
 
 	get problemMatchers(): string[] {
@@ -1727,13 +1770,15 @@ export class Task implements vscode.Task2 {
 
 	set problemMatchers(value: string[]) {
 		if (!Array.isArray(value)) {
+			this.clear();
 			this._problemMatchers = [];
 			this._hasDefinedMatchers = false;
 			return;
+		} else {
+			this.clear();
+			this._problemMatchers = value;
+			this._hasDefinedMatchers = true;
 		}
-		this.clear();
-		this._problemMatchers = value;
-		this._hasDefinedMatchers = true;
 	}
 
 	get hasDefinedMatchers(): boolean {
@@ -1764,14 +1809,13 @@ export class Task implements vscode.Task2 {
 		this._source = value;
 	}
 
-	get group(): TaskGroup {
+	get group(): TaskGroup | undefined {
 		return this._group;
 	}
 
-	set group(value: TaskGroup) {
-		if (value === void 0 || value === null) {
-			this._group = undefined;
-			return;
+	set group(value: TaskGroup | undefined) {
+		if (value === null) {
+			value = undefined;
 		}
 		this.clear();
 		this._group = value;
@@ -1782,8 +1826,8 @@ export class Task implements vscode.Task2 {
 	}
 
 	set presentationOptions(value: vscode.TaskPresentationOptions) {
-		if (value === null) {
-			value = undefined;
+		if (value === null || value === undefined) {
+			value = Object.create(null);
 		}
 		this.clear();
 		this._presentationOptions = value;
@@ -1794,8 +1838,8 @@ export class Task implements vscode.Task2 {
 	}
 
 	set runOptions(value: vscode.RunOptions) {
-		if (value === null) {
-			value = undefined;
+		if (value === null || value === undefined) {
+			value = Object.create(null);
 		}
 		this.clear();
 		this._runOptions = value;
@@ -1971,6 +2015,7 @@ export class DebugAdapterServer implements vscode.DebugAdapterServer {
 	}
 }
 
+/*
 export class DebugAdapterImplementation implements vscode.DebugAdapterImplementation {
 	readonly implementation: any;
 
@@ -1978,6 +2023,7 @@ export class DebugAdapterImplementation implements vscode.DebugAdapterImplementa
 		this.implementation = transport;
 	}
 }
+*/
 
 export enum LogLevel {
 	Trace = 1,
